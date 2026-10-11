@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { createConnection, stripPrefix, WebRTCMessageType } from '../webrtc'
+import {
+  createConnection,
+  deliverFloorMessage,
+  setFloorTransport,
+  stripPrefix,
+  WebRTCMessageType,
+} from '../webrtc'
 
 /** Minimal WebSocket stand-in that lets tests drive the signalling channel. */
 class FakeWebSocket {
@@ -215,6 +221,61 @@ describe('createConnection', () => {
     connection.close()
     expect(peerConnection.close).toHaveBeenCalled()
     expect(track.stop).toHaveBeenCalled()
+  })
+})
+
+/* RQ3 experiment seam — delete with the seam block in utils/webrtc.js. */
+describe('floor transport seam', () => {
+  afterEach(() => setFloorTransport(null))
+
+  test('is inert until a transport is injected', async () => {
+    const { connection, socket } = connect()
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+
+    connection.requestFloor()
+    connection.releaseFloor()
+    expect(socket.sent.map((message) => message.type)).toEqual([
+      'answer',
+      WebRTCMessageType.FloorRequest,
+      WebRTCMessageType.FloorRelease,
+    ])
+  })
+
+  test('routes the floor away from the socket while one is injected', async () => {
+    const transport = { sendRequest: vi.fn(() => true), sendRelease: vi.fn(() => true) }
+    const { connection, socket } = connect()
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+    setFloorTransport(transport)
+
+    expect(connection.requestFloor()).toBe(true)
+    connection.releaseFloor()
+
+    expect(transport.sendRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WebRTCMessageType.FloorRequest, ssrc: 4242 }),
+    )
+    expect(transport.sendRelease).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WebRTCMessageType.FloorRelease }),
+    )
+    // Only the answer ever reached the socket.
+    expect(socket.sent).toHaveLength(1)
+  })
+
+  test('a grant delivered off-socket still gates the microphone', async () => {
+    const floorGrant = vi.fn()
+    const { socket } = connect({ floorGrant })
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+    expect(track.enabled).toBe(false)
+
+    expect(deliverFloorMessage({ type: WebRTCMessageType.FloorGrant })).toBe(true)
+    expect(track.enabled).toBe(true)
+    expect(floorGrant).toHaveBeenCalled()
+  })
+
+  test('delivery reports failure once the connection is gone', async () => {
+    const { connection, socket } = connect()
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+    connection.close()
+    expect(deliverFloorMessage({ type: WebRTCMessageType.FloorGrant })).toBe(false)
   })
 })
 

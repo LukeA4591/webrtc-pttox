@@ -24,6 +24,61 @@ const PARTICIPANT_ID = 'Rock'
 
 const noop = () => {}
 
+/* ─── RQ3 EXPERIMENT SEAM — floor-control transport ─────────────────── begin ─
+ *
+ * Temporary research code for RQ3 (floor signalling over the WebSocket vs over
+ * a WebRTC data channel). It is inert until `src/research/floor` injects a
+ * transport, so with the experiment off the floor path below is byte-for-byte
+ * the behaviour that shipped: `requestFloor()` / `releaseFloor()` fall through
+ * to `send()` on the signalling WebSocket, un-enveloped, exactly as before.
+ *
+ * Why the seam is here at all: the experiment has to measure the *real* press
+ * path, and both the WebSocket and the peer connection live in the closure
+ * below where no outside code can reach them.
+ *
+ * To reverse the experiment, delete:
+ *   1. this block,
+ *   2. the line marked `RQ3` in `requestFloor()`,
+ *   3. the line marked `RQ3` in `releaseFloor()`,
+ *   4. the two lines marked `RQ3` inside `createConnection` (one next to
+ *      `handleMessage`, one in `teardown`),
+ *   5. `src/research/floor/`.
+ * Nothing else in `src/` knows the experiment exists. See
+ * docs/floor-transport-experiment.md.
+ */
+
+/** Injected floor transport, or `null` for normal operation. */
+let floorTransport = null
+
+/** The live connection's own floor handler, so replies can be fed back in. */
+let floorDelivery = null
+
+/**
+ * Route floor requests and releases through `transport` instead of the
+ * signalling WebSocket. Pass `null` to restore normal operation.
+ *
+ * @param {{sendRequest: (body: object) => boolean,
+ *          sendRelease: (body: object) => boolean} | null} transport
+ */
+export function setFloorTransport(transport) {
+  floorTransport = transport
+}
+
+/**
+ * Hand a floor message that arrived somewhere other than the signalling
+ * WebSocket (i.e. on a data channel) to the normal application handler, so the
+ * microphone gate and the UI react exactly as they do for a WebSocket grant.
+ *
+ * @param {object} body the un-enveloped floor message, e.g. `{type:'floor-grant'}`
+ * @returns {boolean} false when no connection is currently open
+ */
+export function deliverFloorMessage(body) {
+  if (!floorDelivery) return false
+  floorDelivery(body)
+  return true
+}
+/* ─── RQ3 EXPERIMENT SEAM ─────────────────────────────────────────────── end ─ */
+
 /**
  * Open a PTToX session against `domain`.
  *
@@ -100,6 +155,10 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
       handlers.log('error', `Failed handling "${message.type}": ${error.message}`)
     }
   })
+
+  // RQ3: lets the experiment layer feed a floor reply that arrived off-socket
+  // into this same handler. See the seam block at the top of this file.
+  floorDelivery = (body) => handleMessage(body)
 
   async function handleMessage(message) {
     switch (message.type) {
@@ -238,6 +297,7 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
   }
 
   function teardown() {
+    floorDelivery = null // RQ3: see the seam block at the top of this file.
     if (peerConnection) {
       peerConnection.ontrack = null
       peerConnection.close()
@@ -256,23 +316,29 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
      * so this works whether or not anyone else is currently transmitting.
      */
     requestFloor() {
-      return send({
+      const body = {
         type: WebRTCMessageType.FloorRequest,
         participant_id: PARTICIPANT_ID,
         ssrc,
         cc_port: ccPort,
-      })
+      }
+      // RQ3: see the seam block at the top of this file.
+      if (floorTransport) return floorTransport.sendRequest(body)
+      return send(body)
     },
 
     /** Give the floor back (PTT released). */
     releaseFloor() {
       setMicEnabled(false)
-      return send({
+      const body = {
         type: WebRTCMessageType.FloorRelease,
         participant_id: PARTICIPANT_ID,
         ssrc,
         cc_port: ccPort,
-      })
+      }
+      // RQ3: see the seam block at the top of this file.
+      if (floorTransport) return floorTransport.sendRelease(body)
+      return send(body)
     },
 
     /** Read transport stats for the network indicator. */
