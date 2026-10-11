@@ -1,0 +1,238 @@
+/* PTToX design tokens. Light is the primary theme; dark mirrors every token. */
+
+:root {
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+
+  --ok-500: #16a34a;
+  --ok-100: #dcfce7;
+  --warn-500: #d97706;
+  --warn-100: #fef3c7;
+  --danger-500: #dc2626;
+  --danger-100: #fee2e2;
+
+  --surface: #ffffff;
+  --surface-sunken: #f8fafc;
+  --surface-raised: #ffffff;
+  --surface-hover: #f1f5f9;
+
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+  --header-h: 64px;
+  --sidebar-w: 280px;
+  --tools-w: 320px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-50: #172554;
+    --brand-100: #1e3a8a;
+    --brand-200: #1e40af;
+    --brand-300: #3b82f6;
+    --brand-500: #60a5fa;
+    --brand-600: #3b82f6;
+    --brand-700: #93c5fd;
+
+    --ok-500: #4ade80;
+    --ok-100: #14532d;
+    --warn-500: #fbbf24;
+    --warn-100: #451a03;
+    --danger-500: #f87171;
+    --danger-100: #450a0a;
+
+    --surface: #0f172a;
+    --surface-sunken: #0b1220;
+    --surface-raised: #1e293b;
+    --surface-hover: #334155;
+
+    --border: #1e293b;
+    --border-strong: #334155;
+
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-faint: #64748b;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* PTT is a press-and-hold gesture; stop iOS selecting text on long press. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Shared building blocks --------------------------------------------------- */
+
+.panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--danger:hover:not(:disabled) {
+  border-color: var(--danger-500);
+  color: var(--danger-500);
+}
+
+.btn--primary {
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  color: #fff;
+}
+
+.empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 6px;
+  background: var(--surface-hover);
+  border-radius: 50%;
+  color: var(--text-faint);
+}
+
+.empty-state__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.empty-state__body {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  max-width: 22ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
