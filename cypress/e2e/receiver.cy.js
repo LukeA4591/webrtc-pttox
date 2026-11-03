@@ -12,7 +12,10 @@ describe('PTToX client shell', () => {
   it('renders the three panes with an idle, disconnected state', () => {
     cy.contains('h1', 'Push to Talk')
     cy.contains('Status').parent().should('contain.text', 'Disconnected')
-    cy.contains('Servers')
+    // The three panes: talkgroups, the stage, and the right rail. Servers are
+    // not among them — they live in the header dropdown, not the sidebar.
+    cy.contains('Groups')
+    cy.contains('Log')
     cy.contains('No recent activity').should('not.exist') // "Client ready" is logged on mount
   })
 
@@ -25,9 +28,11 @@ describe('PTToX client shell', () => {
     cy.get('[role="status"]').should('not.exist')
   })
 
-  it('lists servers in the sidebar and can add one', () => {
-    cy.get('input[aria-label="Add server host"]').first().type('sidebar.example.test{enter}')
-    cy.get('.sidebar, aside').should('contain.text', 'sidebar.example.test')
+  it('lists talkgroups in the sidebar and can add one', () => {
+    // The sidebar holds groups. Adding a server is covered by the header menu
+    // test below, which is where servers actually live.
+    cy.get('input[aria-label="Add group"]').type('PMR-1{enter}')
+    cy.get('.sidebar, aside').should('contain.text', 'PMR-1')
   })
 
   it('lets the operator pick a server from the header menu', () => {
@@ -52,7 +57,9 @@ describe('PTToX client shell', () => {
 
   it('renames the operator from the account menu', () => {
     cy.get('button[aria-label="Account menu"]').click()
-    cy.contains('button', 'Luke').click()
+    // Scoped to the menu: the trigger button also carries the display name, and
+    // an unscoped match hits that first and closes the menu again.
+    cy.get('button.menu__item').contains('Luke').click()
     cy.get('input[aria-label="Display name"]').clear()
     cy.get('input[aria-label="Display name"]').type('Control{enter}')
     cy.get('button[aria-label="Account menu"]').should('contain.text', 'Control')

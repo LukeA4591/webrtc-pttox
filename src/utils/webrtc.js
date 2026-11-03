@@ -62,6 +62,11 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
   // half-duplex: we stay muted until the server grants us the floor.
   let micEnabled = false
 
+  // Whether a floor request of ours is outstanding. The server also replies to
+  // a `floor-release`, so without this a reply is indistinguishable from the
+  // answer to a fresh request.
+  let floorWanted = false
+
   const url = `wss://${domain}/api/webrtc/ws`
   handlers.status('connecting')
   handlers.log('info', `Connecting to ${domain}`)
@@ -112,8 +117,11 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
         break
 
       case WebRTCMessageType.NewCall: {
-        // A `new-call` means somebody else started transmitting. It is a
-        // transient event, not a channel we join — it ends when they stop.
+        // A `new-call` means a call has been established by another device. It
+        // is NOT "somebody started transmitting": the call stays up until
+        // `end-call`, whether or not anyone is speaking into it, and the floor
+        // moves between participants within it. The server sends no per-
+        // transmission state, so this is the finest granularity we get.
         const call = {
           callId: message.call_id,
           groupId: message.calling_group_id,
@@ -133,13 +141,26 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
         handlers.log('info', 'Transmission ended')
         break
 
+      // Floor replies only mean anything while a request of ours is still
+      // outstanding. The server answers a `floor-release` too, and that reply
+      // used to read as a fresh denial the moment the operator let go — or,
+      // far worse, as a late grant that reopened the mic after they had.
       case WebRTCMessageType.FloorGrant:
+        if (!floorWanted) {
+          handlers.log('info', 'Ignored a floor grant for a request we already released')
+          break
+        }
         setMicEnabled(true)
         handlers.floorGrant(message)
         handlers.log('success', 'Floor granted — you are live')
         break
 
       case WebRTCMessageType.FloorDeny:
+        if (!floorWanted) {
+          handlers.log('info', 'Ignored a floor denial for a request we already released')
+          break
+        }
+        floorWanted = false
         setMicEnabled(false)
         handlers.floorDeny(message)
         handlers.log('warn', 'Floor denied')
@@ -246,6 +267,7 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
     localStream?.getTracks().forEach((track) => track.stop())
     localStream = null
     micEnabled = false
+    floorWanted = false
     ccPort = 0
     ssrc = null
   }
@@ -256,16 +278,20 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
      * so this works whether or not anyone else is currently transmitting.
      */
     requestFloor() {
-      return send({
+      floorWanted = true
+      const sent = send({
         type: WebRTCMessageType.FloorRequest,
         participant_id: PARTICIPANT_ID,
         ssrc,
         cc_port: ccPort,
       })
+      if (!sent) floorWanted = false
+      return sent
     },
 
     /** Give the floor back (PTT released). */
     releaseFloor() {
+      floorWanted = false
       setMicEnabled(false)
       return send({
         type: WebRTCMessageType.FloorRelease,

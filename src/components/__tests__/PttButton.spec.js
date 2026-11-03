@@ -41,6 +41,20 @@ describe('PttButton', () => {
     expect(wrapper.text()).toContain('Disconnected')
   })
 
+  test('says whether a call is open, since the floor needs one', async () => {
+    const wrapper = mount(PttButton)
+    goLive()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('No call open')
+
+    on.incomingCall({ callId: 'call-1', groupId: 'group:PMR-1', userAlias: 'Alpha' })
+    await wrapper.vm.$nextTick()
+    // Stated as a fact about the call, never as "Alpha is talking": a call
+    // outlives any one transmission.
+    expect(wrapper.text()).toContain('Call open · PMR-1')
+    expect(wrapper.text()).not.toContain('talking')
+  })
+
   test('becomes usable once the media session is negotiated', async () => {
     const wrapper = mount(PttButton)
     goLive()

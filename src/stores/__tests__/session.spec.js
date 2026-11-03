@@ -158,6 +158,76 @@ describe('push to talk', () => {
     expect(store.floorState.value).toBe('idle')
   })
 
+  test('a floor request the server never answers stays denied until released', () => {
+    vi.useFakeTimers()
+    try {
+      ready()
+      store.pressPtt()
+      expect(store.floorState.value).toBe('requesting')
+
+      // The server stays silent — this one never refuses in words.
+      vi.advanceTimersByTime(1000)
+      expect(store.floorState.value).toBe('denied')
+
+      // The denial holds while the key is down. Settling back to "Push to Talk"
+      // under a held button would say the opposite of what is true.
+      vi.advanceTimersByTime(10000)
+      expect(store.floorState.value).toBe('denied')
+
+      store.releasePtt()
+      expect(store.floorState.value).toBe('idle')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('releasing after a denial still releases the floor', () => {
+    vi.useFakeTimers()
+    try {
+      ready()
+      store.pressPtt()
+      vi.advanceTimersByTime(1000)
+
+      // The regression this guards: the release was skipped whenever the
+      // display no longer said "requesting", so the server went on believing we
+      // held the floor and ignored every later request.
+      store.releasePtt()
+      expect(handle.releaseFloor).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('a late grant is honoured while the button is still held', () => {
+    vi.useFakeTimers()
+    try {
+      ready()
+      store.pressPtt()
+      vi.advanceTimersByTime(1000)
+      expect(store.floorState.value).toBe('denied')
+
+      // Slower than the timeout, but the operator never let go.
+      on.floorGrant({})
+      expect(store.floorState.value).toBe('granted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('an answered floor request is not clawed back by the timeout', () => {
+    vi.useFakeTimers()
+    try {
+      ready()
+      store.pressPtt()
+      on.floorGrant({})
+
+      vi.advanceTimersByTime(8000)
+      expect(store.floorState.value).toBe('granted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('releasing when idle does not send a spurious release', () => {
     ready()
     store.releasePtt()
@@ -482,6 +552,23 @@ describe('instant replay', () => {
 
       expect(store.clips.value).toHaveLength(20)
       expect(revoke).toHaveBeenCalled()
+    })
+
+    test('switching recording on mid-call captures the call already running', () => {
+      store.connect()
+      on.status('connected')
+      on.remoteStream({})
+      on.incomingCall(CALL)
+      expect(recordClip).not.toHaveBeenCalled()
+
+      // The regression this guards: recording only ever began on `new-call`, so
+      // arming it during a call captured nothing until the next call started.
+      store.toggleReplay()
+      expect(recordClip).toHaveBeenCalled()
+
+      store.toggleReplay()
+      recorder.onClip({ blob: new Blob(['audio']), durationMs: 900 })
+      expect(store.clips.value[0]).toMatchObject({ alias: 'Alpha', groupLabel: 'PMR-1' })
     })
 
     test('losing the connection closes off the clip in progress', () => {

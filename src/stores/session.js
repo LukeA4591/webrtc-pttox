@@ -13,6 +13,17 @@ const STORAGE_KEY = 'pttox.settings'
 const LOG_LIMIT = 200
 const STATS_INTERVAL_MS = 3000
 
+/**
+ * How long to wait for an answer to a floor request before giving up.
+ *
+ * The server never refuses in words — while somebody else holds the floor no
+ * `floor-deny` arrives at all — so silence is the refusal and this is how long
+ * we listen for it. A grant comes back almost at once when the floor is free,
+ * so this is short on purpose: a radio operator needs to know within a moment
+ * whether they are live, not after a pause long enough to start speaking into.
+ */
+const FLOOR_REQUEST_TIMEOUT_MS = 300
+
 /** How many transmissions the replay buffer holds before evicting the oldest. */
 const CLIP_LIMIT = 20
 
@@ -113,9 +124,13 @@ export const connectionState = ref('disconnected')
 export const floorState = ref('idle')
 
 /**
- * Transmissions inbound right now. This is a live indicator, not a roster — the
- * server reports each via `new-call` and withdraws it on `end-call`. It is a
- * list because the server may overlap them; `receiving` surfaces the newest.
+ * Calls that are currently up. The server reports each via `new-call` and
+ * withdraws it on `end-call`. It is a list because the server may overlap them;
+ * `receiving` surfaces the newest.
+ *
+ * A call is not a transmission: it outlives any one person speaking, and the
+ * floor moves around inside it. We are told nothing about who holds the floor,
+ * so this cannot say who is talking right now, only that a call is open.
  */
 const activeCalls = ref([])
 
@@ -169,6 +184,20 @@ export const micLevel = ref(0)
 
 let connection = null
 let statsTimer = null
+let floorTimer = null
+let floorRequestedAt = 0
+
+/**
+ * Whether the operator is physically holding the button.
+ *
+ * Tracked separately from `floorState`, which is only what the button says. The
+ * two are not the same thing: the display can give up on a silent server while
+ * the request is still live on the wire, and conflating them meant a release
+ * was never sent for a request the display had already written off — leaving
+ * the server believing this client still held the floor, and every later
+ * request unanswered.
+ */
+let pttHeld = false
 let logSeq = 0
 let micTest = null
 let clipSeq = 0
@@ -439,9 +468,17 @@ export function setDefaultPan(position) {
 
 export function toggleReplay() {
   replayEnabled.value = !replayEnabled.value
-  // Turning it off stops the transmission in progress but keeps what is already
-  // captured; discarding it is an explicit choice via clearClips().
-  if (!replayEnabled.value) finishRecording(0)
+  if (replayEnabled.value) {
+    // Catch the call already in progress. Recording only ever began on
+    // `new-call`, so switching this on during a call — which is exactly when an
+    // operator reaches for it — captured nothing at all until the next call
+    // started, and on a server whose calls run long that could be never.
+    if (receiving.value) startRecording(receiving.value)
+  } else {
+    // Turning it off stops the capture in progress but keeps what is already
+    // captured; discarding it is an explicit choice via clearClips().
+    finishRecording(0)
+  }
   persist()
   addLog('info', replayEnabled.value ? 'Recording transmissions' : 'Recording stopped')
 }
@@ -503,7 +540,8 @@ export function clearClips() {
 
 export function toggleMicMute() {
   micMuted.value = !micMuted.value
-  if (micMuted.value && floorState.value !== 'idle') releasePtt()
+  // releasePtt() is a no-op unless the button is actually held.
+  if (micMuted.value) releasePtt()
   addLog(micMuted.value ? 'warn' : 'info', micMuted.value ? 'Microphone muted' : 'Microphone live')
 }
 
@@ -609,19 +647,29 @@ export function connect() {
         startRecording(call)
       },
       callEnded: (callId) => {
-        // A call we never showed simply is not in the list, so this is a no-op.
-        activeCalls.value = activeCalls.value.filter((entry) => entry.callId !== callId)
+        const remaining = activeCalls.value.filter((entry) => entry.callId !== callId)
+        // An end-call we cannot match is left alone on purpose: a late one for
+        // an older transmission must not clear the current one. But say so, or
+        // a server whose ids never match leaves the banner stuck in silence.
+        if (activeCalls.value.length > 0 && remaining.length === activeCalls.value.length) {
+          addLog('warn', `Transmission ended for an unrecognised call id "${callId}"`)
+        }
+        activeCalls.value = remaining
         if (recordingCallId === callId) finishRecording(CLIP_TAIL_MS)
       },
       floorGrant: () => {
+        clearFloorTimer()
+        // Logged so the request timeout can be set from a measurement rather
+        // than a guess.
+        if (floorRequestedAt) {
+          addLog('info', `Floor granted after ${Date.now() - floorRequestedAt} ms`)
+          floorRequestedAt = 0
+        }
         floorState.value = 'granted'
       },
       floorDeny: () => {
-        floorState.value = 'denied'
-        // Let the operator see the denial, then settle back to idle.
-        setTimeout(() => {
-          if (floorState.value === 'denied') floorState.value = 'idle'
-        }, 1200)
+        clearFloorTimer()
+        showDenied()
       },
       closed: () => {
         // Release the handle as well as the state. `connect()` early-returns
@@ -676,6 +724,9 @@ export function logout() {
 function resetSessionState() {
   // The stream is about to go away, so close off any clip while it still can.
   finishRecording(0)
+  clearFloorTimer()
+  pttHeld = false
+  floorRequestedAt = 0
   activeCalls.value = []
   panGroupKey.value = null
   mediaReady.value = false
@@ -686,16 +737,60 @@ function resetSessionState() {
 
 /* -- push to talk --------------------------------------------------------- */
 
+function clearFloorTimer() {
+  if (floorTimer) clearTimeout(floorTimer)
+  floorTimer = null
+}
+
+/**
+ * Show a denial, and leave it showing.
+ *
+ * It clears when the operator lets go, not on a timer. A refusal that wipes
+ * itself after a moment leaves the button reading "Push to Talk" while the key
+ * is still down, which says the opposite of what is true. Holding the denial
+ * also means a short request timeout costs nothing: a grant that arrives late
+ * still overrides it for as long as the key is held.
+ */
+function showDenied() {
+  floorState.value = 'denied'
+}
+
 export function pressPtt() {
-  if (!canTalk.value || floorState.value !== 'idle') return
+  if (!canTalk.value || pttHeld) return
+  pttHeld = true
+  floorRequestedAt = Date.now()
   floorState.value = 'requesting'
   if (!connection?.requestFloor()) {
+    pttHeld = false
+    floorRequestedAt = 0
     floorState.value = 'idle'
+    return
   }
+  clearFloorTimer()
+  floorTimer = setTimeout(() => {
+    if (!pttHeld || floorState.value !== 'requesting') return
+    // Silence is the only refusal this server sends, so after a wait the floor
+    // is most likely taken. This changes what the button says and nothing else:
+    // the request stays live on the wire, because a late grant is still a grant
+    // while the key is down, and releasing still sends a release.
+    addLog(
+      'warn',
+      receiving.value
+        ? 'No answer to the floor request — another station is holding the floor'
+        : 'No answer to the floor request — no call is open to talk on',
+    )
+    showDenied()
+  }, FLOOR_REQUEST_TIMEOUT_MS)
 }
 
 export function releasePtt() {
-  if (floorState.value === 'idle') return
+  clearFloorTimer()
+  // Keyed off the button, not the display. A request the display gave up on is
+  // still outstanding at the server and must be released, or the server goes on
+  // believing we hold the floor and ignores everything we ask for afterwards.
+  if (!pttHeld) return
+  pttHeld = false
+  floorRequestedAt = 0
   connection?.releaseFloor()
   floorState.value = 'idle'
 }

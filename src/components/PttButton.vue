@@ -14,10 +14,26 @@ import {
   micTestActive,
   mediaReady,
   pressPtt,
+  receiving,
   releasePtt,
+  stripPrefix,
 } from '@/stores/session'
 
 const held = computed(() => floorState.value !== 'idle')
+
+/**
+ * Whether a call is open, in words.
+ *
+ * This server only grants the floor while a call is up, so an operator needs to
+ * see that window — but saying "somebody is talking" would be wrong, because a
+ * call outlives any one transmission. Hence a plain statement of fact and no
+ * green, no bars, no implication that audio is flowing.
+ */
+const call = computed(() => {
+  if (!receiving.value) return { open: false, text: 'No call open' }
+  const where = stripPrefix(receiving.value.groupId)
+  return { open: true, text: where ? `Call open · ${where}` : 'Call open' }
+})
 
 const caption = computed(() => {
   if (micMuted.value) return { title: 'Microphone muted', hint: 'Unmute to transmit' }
@@ -29,7 +45,12 @@ const caption = computed(() => {
       idle: { title: 'Push to Talk', hint: 'Hold to speak' },
       requesting: { title: 'Requesting floor…', hint: 'Waiting for the server' },
       granted: { title: 'You are live', hint: 'Release to stop' },
-      denied: { title: 'Floor denied', hint: 'Someone else is speaking' },
+      denied: {
+        title: 'Floor denied',
+        hint: call.value.open
+          ? 'Another station is holding the floor'
+          : 'No call is open to talk on',
+      },
     }[floorState.value] ?? { title: 'Push to Talk', hint: 'Hold to speak' }
   )
 })
@@ -99,6 +120,10 @@ onBeforeUnmount(() => {
       <span class="ptt__ring" aria-hidden="true" />
       <AppIcon :name="micMuted ? 'micOff' : 'mic'" :size="52" class="ptt__icon" />
     </button>
+
+    <p v-if="isConnected" class="ptt__call" :class="{ 'ptt__call--open': call.open }">
+      {{ call.text }}
+    </p>
 
     <h2 class="ptt__title">{{ caption.title }}</h2>
     <p class="ptt__hint">{{ caption.hint }}</p>
@@ -203,6 +228,18 @@ onBeforeUnmount(() => {
 
 .ptt__icon {
   position: relative;
+}
+
+.ptt__call {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.ptt__call--open {
+  color: var(--text-muted);
 }
 
 .ptt__title {

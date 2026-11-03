@@ -98,20 +98,46 @@ describe('createConnection', () => {
   })
 
   test('keeps the microphone muted until the floor is granted', async () => {
-    const { socket } = connect()
+    const { connection, socket } = connect()
     await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
     expect(track.enabled).toBe(false)
 
+    connection.requestFloor()
     await socket.receive({ type: WebRTCMessageType.FloorGrant, ssrc: 4242 })
     expect(track.enabled).toBe(true)
 
+    connection.requestFloor()
     await socket.receive({ type: WebRTCMessageType.FloorDeny, ssrc: 4242 })
     expect(track.enabled).toBe(false)
+  })
+
+  test('a floor reply arriving after we let go never reopens the microphone', async () => {
+    const { connection, socket } = connect()
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+
+    connection.requestFloor()
+    connection.releaseFloor()
+    // The server's answer to the request lands after the operator let go.
+    await socket.receive({ type: WebRTCMessageType.FloorGrant, ssrc: 4242 })
+    expect(track.enabled).toBe(false)
+  })
+
+  test('a floor denial we did not ask for is not reported', async () => {
+    const floorDeny = vi.fn()
+    const { connection, socket } = connect({ floorDeny })
+    await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+
+    connection.requestFloor()
+    connection.releaseFloor()
+    // PTToX answers a floor-release too; that is not a denial of anything.
+    await socket.receive({ type: WebRTCMessageType.FloorDeny, ssrc: 4242 })
+    expect(floorDeny).not.toHaveBeenCalled()
   })
 
   test('releasing the floor mutes the microphone immediately', async () => {
     const { connection, socket } = connect()
     await socket.receive({ type: WebRTCMessageType.NewOffer, sdp: 'remote-sdp' })
+    connection.requestFloor()
     await socket.receive({ type: WebRTCMessageType.FloorGrant, ssrc: 4242 })
     expect(track.enabled).toBe(true)
 

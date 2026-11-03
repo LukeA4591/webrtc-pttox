@@ -7,7 +7,6 @@ import DeviceSelect from '@/components/DeviceSelect.vue'
 import GroupSidebar from '@/components/GroupSidebar.vue'
 import MicLevelMeter from '@/components/MicLevelMeter.vue'
 import PttButton from '@/components/PttButton.vue'
-import ReceivingBanner from '@/components/ReceivingBanner.vue'
 import ReplayPanel from '@/components/ReplayPanel.vue'
 import ToolsPanel from '@/components/ToolsPanel.vue'
 import VolumeControl from '@/components/VolumeControl.vue'
@@ -174,7 +173,6 @@ onBeforeUnmount(() => {
         <h1 class="stage__title">Push to Talk</h1>
 
         <div class="stage__card card">
-          <ReceivingBanner />
           <PttButton />
 
           <MicLevelMeter />
