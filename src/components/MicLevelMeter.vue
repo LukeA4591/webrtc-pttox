@@ -9,8 +9,8 @@ const SEGMENTS = 20
 const lit = computed(() => Math.round(micLevel.value * SEGMENTS))
 
 const verdict = computed(() => {
-  if (micLevel.value < 0.04) return { tone: 'quiet', text: 'No input detected — say something' }
-  if (micLevel.value > 0.92) return { tone: 'hot', text: 'Too loud — clipping likely' }
+  if (micLevel.value < 0.04) return { tone: 'quiet', text: 'No input detected, say something' }
+  if (micLevel.value > 0.92) return { tone: 'hot', text: 'Too loud, clipping likely' }
   return { tone: 'ok', text: 'Input level looks good' }
 })
 
@@ -44,7 +44,7 @@ function toneOf(index) {
         />
       </div>
 
-      <p class="meter__note">Audio stays local — nothing is transmitted during the test.</p>
+      <p class="meter__note">Audio stays local, nothing is transmitted during the test.</p>
     </div>
   </Transition>
 </template>

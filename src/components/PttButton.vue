@@ -25,7 +25,7 @@ const held = computed(() => floorState.value !== 'idle')
  * Whether a call is open, in words.
  *
  * This server only grants the floor while a call is up, so an operator needs to
- * see that window — but saying "somebody is talking" would be wrong, because a
+ * see that window, but saying "somebody is talking" would be wrong, because a
  * call outlives any one transmission. Hence a plain statement of fact and no
  * green, no bars, no implication that audio is flowing.
  */

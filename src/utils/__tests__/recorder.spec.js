@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { extensionFor, pickMimeType, recordClip } from '../recorder'
 
-/** Minimal MediaRecorder stand-in — jsdom has none. */
+/** Minimal MediaRecorder stand-in; jsdom has none. */
 function installMediaRecorder({ supported = ['audio/webm;codecs=opus'], throwOnNew = false } = {}) {
   const instances = []
 

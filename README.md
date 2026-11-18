@@ -14,93 +14,95 @@ src/
   views/HomeView.vue   Three-pane layout, remote audio element, output routing
 ```
 
-`utils/webrtc.js` reports everything through a callback bag; `stores/session.js`
-turns those callbacks into reactive state. Components only read the store, which
-keeps the signalling layer testable without mounting anything.
+`utils/webrtc.js` reports everything through a callback bag, and
+`stores/session.js` turns those callbacks into reactive state. Components only
+read the store, which keeps the signalling layer testable without mounting
+anything.
 
 ### Servers and groups
 
-**Servers** live in the header dropdown — select, add, or remove. The last
-server cannot be removed, and removing the live one disconnects first.
+Servers live in the header dropdown: select, add, remove. The last server can't
+be removed, and removing the live one disconnects first.
 
-**Groups** (talkgroups) fill the sidebar. They are seeded from
-`calling_group_id` on inbound traffic and can also be added by hand; both are
-persisted, so a group does not vanish when a transmission ends. Identity is the
-bare name, so `group:PMR-1` and a hand-typed `PMR-1` are the same entry.
+Groups (talkgroups) fill the sidebar. They are seeded from `calling_group_id` on
+inbound traffic and can also be added by hand, and both are persisted, so a
+group doesn't vanish when a transmission ends. Identity is the bare name, so
+`group:PMR-1` and a hand-typed `PMR-1` are the same entry.
 
-Group selection is **presentation only** at present. `floor-request` carries no
+Group selection is presentation only at the moment. `floor-request` carries no
 group field, so selecting a group changes highlighting and what the receiving
-banner reflects — it does not target transmission. Adding real targeting needs a
+banner reflects, but it doesn't target transmission. Real targeting needs a
 server-supported field on the floor request.
 
-`new-call` and `end-call` are **inbound transmission events** — they mean
-somebody else started or stopped talking. They drive the "receiving" indicator
-and refresh a group's last-heard time. Treating them as a channel roster is
-wrong in two ways: the entry vanishes the moment the speaker releases, and
-gating transmission on one means you can only talk while somebody else already
-is.
+Worth flagging, since I got this wrong at first: `new-call` and `end-call` are
+inbound transmission events. They mean somebody else started or stopped
+talking, and they drive the receiving indicator and refresh a group's
+last-heard time. They are not a channel roster. The entry disappears the moment
+the speaker releases, and if you gate transmission on one you can only talk
+while somebody else already is.
 
 ### Audio controls
 
-- **Output volume and mute** apply to the `<audio>` element, so they work on
-  every browser regardless of `setSinkId` support. Volume is persisted; mute is
-  not. Raising the slider off zero clears an active mute.
-- **Microphone mute** is a hard block: it disables PTT, releases the floor if
-  held, and is deliberately **not persisted** — a mute that silently survives a
-  reload is a safety hazard on a radio system.
-- **Stereo routing** puts groups in different ears. Off by default; when on, the
+- Output volume and mute apply to the `<audio>` element, so they work on every
+  browser regardless of `setSinkId` support. Volume is persisted, mute isn't.
+  Raising the slider off zero clears an active mute.
+- Microphone mute is a hard block: it disables PTT and releases the floor if
+  held. It is not persisted, on purpose. A mute that silently survives a reload
+  is a safety hazard on a radio system.
+- Stereo routing puts groups in different ears. Off by default; when on, the
   remote stream runs through a `StereoPannerNode` whose position moves per
-  transmission using `calling_group_id`. It only approximates per-group routing
-  — the server sends one mixed track, so simultaneous groups cannot be
-  separated. Restrictions in [docs/stereo-routing.md](docs/stereo-routing.md).
-- **Per-group mute** silences a group without removing it from the sidebar.
-  Playback only, and it fails open — overlapping traffic from an unmuted group
-  still gets through, because the track is mixed.
-  See [docs/group-mute.md](docs/group-mute.md).
-- **Instant replay** records each received transmission to a 20-clip in-memory
-  buffer so a missed call can be played back. Off by default; clips never leave
-  the device and do not survive a reload.
-  See [docs/replay.md](docs/replay.md).
-- **Microphone test** runs a local `AnalyserNode` level meter. It never touches
-  the peer connection and nothing is transmitted; PTT is disabled while it runs.
-  The RMS-to-meter scaling is `levelFromTimeDomain`, exported so it can be
-  tested without a live microphone.
+  transmission using `calling_group_id`. It only approximates per-group
+  routing, because the server sends one mixed track and simultaneous groups
+  can't be separated. Restrictions in
+  [docs/stereo-routing.md](docs/stereo-routing.md).
+- Per-group mute silences a group without removing it from the sidebar.
+  Playback only, and it fails open: overlapping traffic from an unmuted group
+  still gets through, because the track is mixed. See
+  [docs/group-mute.md](docs/group-mute.md).
+- Instant replay records each received transmission to a 20-clip in-memory
+  buffer so a missed call can be played back. Off by default. Clips never leave
+  the device and don't survive a reload. See [docs/replay.md](docs/replay.md).
+- Microphone test runs a local `AnalyserNode` level meter. It never touches the
+  peer connection and nothing is transmitted, and PTT is disabled while it
+  runs. The RMS-to-meter scaling is `levelFromTimeDomain`, exported so it can
+  be tested without a live microphone.
 
 ### Push to talk
 
-Hold the button or the space bar. Press sends `floor-request`; release sends
-`floor-release`. This works whenever the media session is up, independent of any
-inbound call.
+Hold the button or the space bar. Press sends `floor-request`, release sends
+`floor-release`. This works whenever the media session is up, independent of
+any inbound call.
 
 Floor messages carry `ssrc` and `cc_port`, both session-scoped:
 
-- `ssrc` is read from our own `outbound-rtp` stats once media flows.
-- `cc_port` arrives as `web_rtc_port` on `new-call` and is **retained after the
-  call ends**, since that message is the only place the server sends it. Until
-  the first inbound call it is `0` — see the caveat below.
+- `ssrc` comes from our own `outbound-rtp` stats once media flows.
+- `cc_port` arrives as `web_rtc_port` on `new-call`, and we hold onto it after
+  the call ends, since that message is the only place the server sends it.
+  Until the first inbound call it is `0`, which is the caveat below.
 
 The microphone track stays `enabled = false` until the server answers with
-`floor-grant`, and is muted again on release, on window blur, on tab hide, and
-on unmount — the mic is never open without the floor.
+`floor-grant`, and goes back to muted on release, on window blur, on tab hide
+and on unmount. The mic is never open without the floor.
 
-> **Unverified:** whether the server accepts `cc_port: 0` for a floor request
-> made before any inbound call has been seen. If a first transmission on a fresh
-> connection is denied but later ones succeed, that is the cause, and the port
-> needs to come from somewhere earlier in the handshake.
+One thing I couldn't verify: whether the server accepts `cc_port: 0` for a
+floor request made before any inbound call has been seen. If a first
+transmission on a fresh connection is denied but later ones succeed, that's the
+cause, and the port needs to come from somewhere earlier in the handshake.
 
 ### Authentication
 
-There is none yet. The header shows a locally stored display name and "Log out"
-clears local settings and disconnects. When the server exposes authentication,
-the token belongs in `stores/session.js` (see the `TODO(auth)` marker) and gets
+None yet. The header shows a locally stored display name, and "Log out" clears
+local settings and disconnects. When the server exposes authentication, the
+token belongs in `stores/session.js` (there's a `TODO(auth)` marker) and gets
 attached to the signalling URL in `utils/webrtc.js`.
 
 ### PWA
 
 `vite-plugin-pwa` generates the manifest and service worker. Updates use
-`registerType: 'prompt'` so a new version never swaps itself in mid-call — the
+`registerType: 'prompt'` so a new version never swaps itself in mid-call; the
 operator gets a toast and chooses when to reload. Note that `getUserMedia`
-requires a secure context, so the app must be served over HTTPS (or localhost).
+requires a secure context, so the app has to be served over HTTPS (or
+localhost).
 
 ## WebSocket signalling
 

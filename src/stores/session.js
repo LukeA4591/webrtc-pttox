@@ -1,7 +1,7 @@
 /**
  * Single source of truth for the PTToX client.
  *
- * A module-level singleton rather than Pinia — the app has exactly one session,
+ * A module-level singleton rather than Pinia: the app has exactly one session,
  * and every component reads the same reactive refs.
  */
 import { computed, ref, shallowRef } from 'vue'
@@ -16,8 +16,8 @@ const STATS_INTERVAL_MS = 3000
 /**
  * How long to wait for an answer to a floor request before giving up.
  *
- * The server never refuses in words — while somebody else holds the floor no
- * `floor-deny` arrives at all — so silence is the refusal and this is how long
+ * The server never refuses in words. While somebody else holds the floor no
+ * `floor-deny` arrives at all, so silence is the refusal and this is how long
  * we listen for it. A grant comes back almost at once when the floor is free,
  * so this is short on purpose: a radio operator needs to know within a moment
  * whether they are live, not after a pause long enough to start speaking into.
@@ -60,11 +60,11 @@ const DEFAULT_SETTINGS = {
   selectedServer: DEFAULT_SERVERS[0] ?? '',
   micDeviceId: '',
   speakerDeviceId: '',
-  /** [{ key, rawId, label, lastHeard, manual, pan, muted }] — see the groups section. */
+  /** [{ key, rawId, label, lastHeard, manual, pan, muted }]. See the groups section. */
   groups: [],
   selectedGroupKey: null,
   outputVolume: 1,
-  /** Send groups to different ears. Off by default — see docs/stereo-routing.md. */
+  /** Send groups to different ears. Off by default. See docs/stereo-routing.md. */
   stereoRouting: false,
   /** Ear for any group without an explicit choice: 'left' | 'center' | 'right'. */
   defaultPan: 'center',
@@ -166,14 +166,14 @@ export const defaultPan = ref(settings.defaultPan)
 const panGroupKey = ref(null)
 
 /**
- * Recorded transmissions, newest first. In memory only — clips never touch
+ * Recorded transmissions, newest first. In memory only; clips never touch
  * disk and never leave the device. See docs/replay.md.
  */
 export const replayEnabled = ref(settings.replayEnabled)
 export const clips = ref([])
 
 /**
- * Hard microphone mute. Deliberately NOT persisted — a mute that silently
+ * Hard microphone mute. Deliberately NOT persisted: a mute that silently
  * survives a reload is a safety hazard on a radio system.
  */
 export const micMuted = ref(false)
@@ -193,7 +193,7 @@ let floorRequestedAt = 0
  * Tracked separately from `floorState`, which is only what the button says. The
  * two are not the same thing: the display can give up on a silent server while
  * the request is still live on the wire, and conflating them meant a release
- * was never sent for a request the display had already written off — leaving
+ * was never sent for a request the display had already written off, leaving
  * the server believing this client still held the floor, and every later
  * request unanswered.
  */
@@ -213,7 +213,7 @@ export const isConnected = computed(
 
 /**
  * Transmitting only needs a negotiated media session. It deliberately does NOT
- * depend on an inbound call being in progress — requiring that would mean you
+ * depend on an inbound call being in progress. Requiring that would mean you
  * could only talk while somebody else already was.
  */
 export const canTalk = computed(
@@ -231,7 +231,7 @@ export function groupPan(group) {
 
 /**
  * StereoPannerNode value for the group we last heard. Only one pan can apply at
- * a time — the remote track is already mixed, so overlapping groups cannot be
+ * a time: the remote track is already mixed, so overlapping groups cannot be
  * separated. See docs/stereo-routing.md.
  */
 export const activePan = computed(() =>
@@ -248,7 +248,7 @@ export function groupMuted(key) {
  *
  * Deliberately fails open: it takes *every* live transmission being from a
  * muted group. The remote track is already mixed, so when a muted and an
- * unmuted group overlap there is no way to drop only one — and on a radio
+ * unmuted group overlap there is no way to drop only one, and on a radio
  * system hearing too much beats missing traffic. Audio with no `new-call`
  * behind it is always audible for the same reason.
  */
@@ -313,7 +313,7 @@ export async function refreshDevices() {
 export function setMicDevice(deviceId) {
   micDeviceId.value = deviceId
   persist()
-  addLog('info', 'Microphone changed — reconnect to apply')
+  addLog('info', 'Microphone changed. Reconnect to apply')
 }
 
 export function setSpeakerDevice(deviceId) {
@@ -412,7 +412,7 @@ export function selectGroup(key) {
 
 /**
  * Silence a group without losing it from the list. Muted groups are still
- * recorded for replay — mute means "do not play", not "do not capture".
+ * recorded for replay: mute means "do not play", not "do not capture".
  */
 export function toggleGroupMute(key) {
   const group = groups.value.find((entry) => entry.key === key)
@@ -457,7 +457,7 @@ export function setGroupPan(key, position) {
   persist()
 }
 
-/** Ear for every group that has not been pinned — the "everything else" bucket. */
+/** Ear for every group that has not been pinned, the "everything else" bucket. */
 export function setDefaultPan(position) {
   if (!PAN_POSITIONS.includes(position)) return
   defaultPan.value = position
@@ -470,8 +470,8 @@ export function toggleReplay() {
   replayEnabled.value = !replayEnabled.value
   if (replayEnabled.value) {
     // Catch the call already in progress. Recording only ever began on
-    // `new-call`, so switching this on during a call — which is exactly when an
-    // operator reaches for it — captured nothing at all until the next call
+    // `new-call`, so switching this on during a call (which is exactly when an
+    // operator reaches for it) captured nothing at all until the next call
     // started, and on a server whose calls run long that could be never.
     if (receiving.value) startRecording(receiving.value)
   } else {
@@ -674,7 +674,7 @@ export function connect() {
       closed: () => {
         // Release the handle as well as the state. `connect()` early-returns
         // while `connection` is set, and the button only calls `disconnect()`
-        // while connected — so a server-initiated close used to leave a stale
+        // while connected, so a server-initiated close used to leave a stale
         // handle that made Connect a silent no-op with no way out but a reload.
         connection = null
         stopStatsPolling()
@@ -776,8 +776,8 @@ export function pressPtt() {
     addLog(
       'warn',
       receiving.value
-        ? 'No answer to the floor request — another station is holding the floor'
-        : 'No answer to the floor request — no call is open to talk on',
+        ? 'No answer to the floor request: another station is holding the floor'
+        : 'No answer to the floor request: no call is open to talk on',
     )
     showDenied()
   }, FLOOR_REQUEST_TIMEOUT_MS)

@@ -15,7 +15,7 @@ const root = ref(null)
 const panel = ref(null)
 /**
  * Flip above the trigger when there is not enough room below. Triggers near the
- * bottom of the window — the microphone and speaker controls — would otherwise
+ * bottom of the window (the microphone and speaker controls) would otherwise
  * open off-screen, and get clipped by the stage card's `overflow: hidden`.
  */
 const dropUp = ref(false)

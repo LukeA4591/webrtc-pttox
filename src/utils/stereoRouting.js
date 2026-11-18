@@ -2,7 +2,7 @@
  * Stereo routing for received audio.
  *
  * The server sends a single mixed remote track, so groups cannot be pulled
- * apart in the audio domain — by the time audio reaches us it is already summed.
+ * apart in the audio domain; by the time audio reaches us it is already summed.
  * What this module provides is a pan control over the whole stream; the store
  * moves it per transmission using the `calling_group_id` on `new-call`, which
  * reads as per-group routing because PTToX is half-duplex.

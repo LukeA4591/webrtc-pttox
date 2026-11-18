@@ -143,7 +143,7 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
 
       // Floor replies only mean anything while a request of ours is still
       // outstanding. The server answers a `floor-release` too, and that reply
-      // used to read as a fresh denial the moment the operator let go — or,
+      // used to read as a fresh denial the moment the operator let go, or,
       // far worse, as a late grant that reopened the mic after they had.
       case WebRTCMessageType.FloorGrant:
         if (!floorWanted) {
@@ -152,7 +152,7 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
         }
         setMicEnabled(true)
         handlers.floorGrant(message)
-        handlers.log('success', 'Floor granted — you are live')
+        handlers.log('success', 'Floor granted: you are live')
         break
 
       case WebRTCMessageType.FloorDeny:
@@ -249,7 +249,7 @@ export function createConnection({ domain, micDeviceId, on = {} }) {
 
   function send(data) {
     if (websocket?.readyState !== WebSocket.OPEN) {
-      handlers.log('warn', 'Cannot send — signalling channel is not open')
+      handlers.log('warn', 'Cannot send: signalling channel is not open')
       return false
     }
     const message = { ...data }

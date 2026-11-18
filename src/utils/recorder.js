@@ -3,8 +3,8 @@
  *
  * A recorder is created fresh for every transmission and thrown away when it
  * finishes, so overlapping calls cannot corrupt one another's state and each
- * clip is a complete, independently decodable file. The alternative — one long
- * recording sliced afterwards — produces fragments missing their container
+ * clip is a complete, independently decodable file. The alternative (one long
+ * recording sliced afterwards) produces fragments missing their container
  * header, which only some browsers will play.
  *
  * Limits are written up in `docs/replay.md`.
@@ -40,7 +40,7 @@ export function extensionFor(mimeType) {
 /**
  * Start recording one transmission.
  *
- * @param {MediaStream} stream Raw remote stream — deliberately not the panned
+ * @param {MediaStream} stream Raw remote stream, deliberately not the panned
  *   one, so a recording never bakes in the operator's stereo routing.
  * @param {(clip: {blob: Blob, durationMs: number}) => void} onClip Called once
  *   the clip is complete. Never called for an empty recording.

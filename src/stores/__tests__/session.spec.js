@@ -40,8 +40,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   store.disconnect()
   store.clearLog()
-  // disconnect() deliberately leaves these alone — un-muting without the
-  // operator asking is the dangerous direction — so reset them per test.
+  // disconnect() deliberately leaves these alone, since un-muting without the
+  // operator asking is the dangerous direction, so reset them per test.
   store.micMuted.value = false
   store.outputMuted.value = false
   store.outputVolume.value = 1
@@ -62,7 +62,7 @@ describe('connection lifecycle', () => {
     expect(createConnection).toHaveBeenCalledTimes(1)
 
     // The server drops the socket. There is no reconnect logic, so the operator
-    // has to reconnect by hand — and the button only offers "Connect" once
+    // has to reconnect by hand, and the button only offers "Connect" once
     // state is disconnected, so `connect()` must not be a silent no-op.
     on.closed()
     on.status('disconnected')
@@ -165,7 +165,7 @@ describe('push to talk', () => {
       store.pressPtt()
       expect(store.floorState.value).toBe('requesting')
 
-      // The server stays silent — this one never refuses in words.
+      // The server stays silent; this one never refuses in words.
       vi.advanceTimersByTime(1000)
       expect(store.floorState.value).toBe('denied')
 
@@ -360,7 +360,7 @@ describe('stereo routing', () => {
     on.incomingCall(CALL)
     expect(store.activePan.value).toBeLessThan(0)
 
-    // "Everything else" — a group with no choice of its own.
+    // "Everything else": a group with no choice of its own.
     on.incomingCall(OTHER)
     expect(store.activePan.value).toBeGreaterThan(0)
   })
@@ -533,7 +533,7 @@ describe('instant replay', () => {
       expect(store.clips.value[0]).toMatchObject({ alias: 'Alpha', groupLabel: 'PMR-1' })
     })
 
-    test('a muted group is still recorded — mute is playback, not capture', () => {
+    test('a muted group is still recorded: mute is playback, not capture', () => {
       recording()
       store.addGroup('PMR-1')
       store.toggleGroupMute('pmr-1')

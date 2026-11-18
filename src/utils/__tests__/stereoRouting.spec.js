@@ -9,7 +9,7 @@ beforeAll(() => {
   HTMLMediaElement.prototype.pause = vi.fn()
 })
 
-/** Minimal Web Audio stand-in — jsdom has none. */
+/** Minimal Web Audio stand-in; jsdom has none. */
 function fakeAudioContext() {
   const panner = {
     pan: { value: 0, setTargetAtTime: vi.fn() },

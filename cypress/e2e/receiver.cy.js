@@ -13,7 +13,7 @@ describe('PTToX client shell', () => {
     cy.contains('h1', 'Push to Talk')
     cy.contains('Status').parent().should('contain.text', 'Disconnected')
     // The three panes: talkgroups, the stage, and the right rail. Servers are
-    // not among them — they live in the header dropdown, not the sidebar.
+    // not among them; they live in the header dropdown, not the sidebar.
     cy.contains('Groups')
     cy.contains('Log')
     cy.contains('No recent activity').should('not.exist') // "Client ready" is logged on mount

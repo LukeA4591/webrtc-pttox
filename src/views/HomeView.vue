@@ -93,7 +93,7 @@ function attachStream() {
   if (stereoRouting.value) {
     router = createStereoRouter(stream)
     if (router) router.setPan(activePan.value)
-    else addLog('warn', 'Stereo routing is not supported here — using plain output')
+    else addLog('warn', 'Stereo routing is not supported here, using plain output')
   }
 
   element.srcObject = router?.stream ?? stream
@@ -101,7 +101,7 @@ function attachStream() {
   applyVolume()
   router?.resume()
   element.play().catch(() => {
-    addLog('warn', 'Audio playback blocked — tap the page to enable sound')
+    addLog('warn', 'Audio playback blocked. Tap the page to enable sound')
   })
 }
 
